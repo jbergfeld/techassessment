@@ -14,3 +14,8 @@ output "vpc_private_subnets" {
 #  value       = module.ec2_instances[*].public_ip
 #}
 
+output "loadbalancer_hostname" {
+  description = "Hostname of the app's ELB"
+  value       = "http://${module.app_deployment.kubernetes_svc_loadbalancer_hostname}"
+}
+
