@@ -1,0 +1,38 @@
+#cloud-config
+repo_update: true
+repo_upgrade: all
+
+packages:
+- postgresql15-server
+- cronie
+
+write_files:
+-   path: /var/lib/pgsql/s3backup.sh
+    owner: postgres:postgres
+    permissions: '0755'
+    content: |
+        #!/bin/bash
+        DUMPFILE=/var/lib/pgsql/databasedump
+        echo "`date` - Performing backup..."
+        pg_dump -U postgres -a -f $DUMPFILE demo
+        echo "`date` - Uploading to S3 bucket..."
+        aws s3 cp $DUMPFILE s3://mywizbackups/
+
+runcmd:
+- [ sh, -c, '/usr/bin/postgresql-setup --initdb' ]
+- [ sh, -c, 'echo "listen_addresses = ''*''" >> /var/lib/pgsql/data/postgresql.conf' ]
+- [ sh, -c, 'echo "host  demo  wiz  0.0.0.0/0  password" >> /var/lib/pgsql/data/pg_hba.conf' ]
+- systemctl start postgresql
+- systemctl enable postgresql
+- [ su, postgres, -c, 'psql -c "CREATE USER wiz WITH CREATEDB PASSWORD ''password'';"' ]
+- [ su, postgres, -c, 'psql -c "CREATE DATABASE demo OWNER wiz;"' ]
+- [ su, postgres, -c, 'psql -d demo -c "ALTER DEFAULT PRIVILEGES GRANT ALL ON TABLES TO wiz;"' ]
+- [ su, postgres, -c, 'psql -d demo -c "CREATE TABLE pets (id int, name varchar(128));"' ]
+- [ su, postgres, -c, 'psql -d demo -c "INSERT INTO pets VALUES(1, ''Standard Poodle'');"' ]
+- [ sh, -c, 'touch /var/log/s3backup.log' ]
+- [ sh, -c, 'chown postgres /var/log/s3backup.log' ]
+- [ sh, -c, 'echo "*/2 * * * * /var/lib/pgsql/s3backup.sh >> /var/log/s3backup.log 2>&1" >> /var/lib/pgsql/dbbackupcrontab' ]
+- [ sh, -c, 'crontab -u postgres /var/lib/pgsql/dbbackupcrontab' ]
+- systemctl start crond
+- systemctl enable crond
+
