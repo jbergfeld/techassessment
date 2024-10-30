@@ -69,6 +69,7 @@ resource "kubernetes_deployment" "hello-kubernetes-deploy" {
         container {
           name  = "hello-kubernetes"
           image = "jonsimages/wiz:stable"
+          image_pull_policy = "Always"
 
           port {
             container_port = "8080"
